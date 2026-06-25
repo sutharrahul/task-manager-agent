@@ -16,10 +16,21 @@ def add_task(title):
 def get_all_taks(status=None):
     cursor, connection, table_name = connect_db()
 
-    if status:
-        cursor.execute(f"SELECT * FROM {table_name} WHERE status = (%s)", (status,))
-    else:
-        cursor.execute(f"SELECT * FROM {table_name}")
+    cursor.execute(f"SELECT * FROM {table_name}")
+
+    all_taks = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return all_taks
+
+
+# get all task with status
+def get_all_task_with_status(status=None):
+    cursor, connection, table_name = connect_db()
+
+    cursor.execute(f"SELECT * FROM {table_name} WHERE status = (%s)", (status,))
 
     all_taks = cursor.fetchall()
 
@@ -30,7 +41,7 @@ def get_all_taks(status=None):
 
 
 # check status of spefic task
-def get_status_task(title):
+def check_task_status(title):
     cursor, connection, table_name = connect_db()
 
     cursor.execute(f"SELECT status FROM {table_name} WHERE title = %s", (title,))
@@ -49,12 +60,13 @@ def update_task(title, status):
     cursor.execute(
         f"UPDATE {table_name} SET status = (%s) WHERE title = %s", (status, title)
     )
-
+    
+    update_task = cursor.fetchone()
     connection.commit()
     cursor.close()
     connection.close()
 
-    return "Update task successfully"
+    return update_task, "Update task successfully"
 
 
 # delete task
