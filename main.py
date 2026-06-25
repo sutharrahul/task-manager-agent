@@ -1,5 +1,6 @@
 import redis
 from typing_extensions import TypedDict
+from langchain_ollama import ChatOllama
 from db_query import (
     add_task,
     get_all_taks,
@@ -9,6 +10,7 @@ from db_query import (
     update_task,
 )
 from system_prompt import INTENT_SYSTEM_PROMPT, SYSTEM_PROMPT
+import json
 
 r = redis.Redis(host="localhost", port=6367, db=0, decode_responses=True)
 
@@ -41,6 +43,24 @@ def pre_input_result(state: AgentState):
     return state
 
 
+# get intent from LLM
+
+
+def get_user_intent(state: AgentState):
+    res_llm = ChatOllama(model="gemma3:4b")
+
+    message = [("system", INTENT_SYSTEM_PROMPT), ("user", state["user_search"])]
+
+    response = res_llm.invoke(message)
+    data = json.loads(response.content)
+
+    state["intent"] = data.get["intent"]
+    state["title"] = data.get["title"]
+    state["status"] = data.get["status"]
+
+    return state
+
+
 # db node
 def intent_query(state: AgentState):
     intent = state["intent"]
@@ -68,3 +88,16 @@ def intent_query(state: AgentState):
 
     return state
 
+
+def chat_bot(state: AgentState):
+    llm = ChatOllama(model="gemma3:4b")
+
+    message = [
+        ("system", SYSTEM_PROMPT),
+        ("db_result", state["db_result"]),
+        ("user", state["user_input"]),
+    ]
+
+    response = llm.invoke(message)
+
+    state["response"] = response
