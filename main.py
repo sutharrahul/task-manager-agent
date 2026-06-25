@@ -11,16 +11,16 @@ from db_query import (
 )
 from system_prompt import INTENT_SYSTEM_PROMPT, SYSTEM_PROMPT
 import json
+from langgraph.graph import StateGraph, START, END
 
 r = redis.Redis(host="localhost", port=6367, db=0, decode_responses=True)
 
 
 class AgentState(TypedDict):
     user_input: str
-    history: list
     extract_data: dict
     db_result: any
-    response: str
+    response: any
     intent: str
     title: str
     status: str
@@ -31,7 +31,7 @@ user_input = input("📝 Ask for Task CRUD -> ")
 
 
 # cache node
-def pre_input_result(state: AgentState):
+def check_cache(state: AgentState):
     res = r.get(state["user_input"])
 
     if res:
@@ -54,9 +54,9 @@ def get_user_intent(state: AgentState):
     response = res_llm.invoke(message)
     data = json.loads(response.content)
 
-    state["intent"] = data.get["intent"]
-    state["title"] = data.get["title"]
-    state["status"] = data.get["status"]
+    state["intent"] = data.get("intent")
+    state["title"] = data.get("title")
+    state["status"] = data.get("status")
 
     return state
 
@@ -82,9 +82,9 @@ def intent_query(state: AgentState):
     elif intent == "capability":
         state["db_result"] = "capability"
     elif intent == "bot_name":
-        state["db_result"] == "bot_name"
+        state["db_result"] = "bot_name"
     else:
-        state["db_result"] == "unsupported"
+        state["db_result"] = "unsupported"
 
     return state
 
@@ -94,10 +94,58 @@ def chat_bot(state: AgentState):
 
     message = [
         ("system", SYSTEM_PROMPT),
-        ("db_result", state["db_result"]),
-        ("user", state["user_input"]),
+        (
+            "user",
+            f"User request{state['user_input']} \n DB Result {state['db_result']}",
+        ),
     ]
 
     response = llm.invoke(message)
 
-    state["response"] = response
+    state["response"] = response.content
+
+    return state
+
+
+def save_cache(state: AgentState):
+    r.set(state["user_input"], state["response"])
+    return state
+
+
+def evaluate_response(state: AgentState):
+    if state["cache"]:
+        return END
+    else:
+        return "get_user_intent"
+
+
+graph_builder = StateGraph(AgentState)
+
+graph_builder.add_node("check_cache", check_cache)
+graph_builder.add_node("get_user_intent", get_user_intent)
+graph_builder.add_node("intent_query", intent_query)
+graph_builder.add_node("chat_bot", chat_bot)
+graph_builder.add_node("save_cache", save_cache)
+
+graph_builder.add_edge(START, "check_cache")
+graph_builder.add_conditional_edges("check_cache", evaluate_response)
+graph_builder.add_edge("get_user_intent", "intent_query")
+graph_builder.add_edge("intent_query", "chat_bot")
+graph_builder.add_edge("chat_bot", END)
+
+app = graph_builder.compile()
+
+result = app.invoke(
+    {
+        "user_input": user_input,
+        "db_result": None,
+        "extract_data": None,
+        "intent": None,
+        "response": None,
+        "status": None,
+        "title": None,
+        "cache": False,
+    }
+)
+
+print(f"📝 You Task Info -----> \n {result["response"]}")
