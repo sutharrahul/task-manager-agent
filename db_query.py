@@ -3,7 +3,7 @@ from db import connect_db
 # Add task
 def add_task(title):
     cursor, connection, table_name = connect_db()
-    cursor.execute(f"INSRT INTO {table_name} (title) VALUES (%s)", (title,))
+    cursor.execute(f"INSERT INTO {table_name} (title) VALUES (%s)", (title,))
 
     connection.commit()
     cursor.close()
@@ -61,12 +61,11 @@ def update_task(title, status):
         f"UPDATE {table_name} SET status = (%s) WHERE title = %s", (status, title)
     )
     
-    update_task = cursor.fetchone()
     connection.commit()
     cursor.close()
     connection.close()
 
-    return update_task, "Update task successfully"
+    return "Update task successfully"
 
 
 # delete task
